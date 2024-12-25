@@ -1,7 +1,8 @@
 import { Component } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
 import { ApiService } from "./api/api.service";
-import { API_CONFIG } from "./api/api.config"; // Fix the import
+import { API_CONFIG } from "./api/api.config";
+import {appConfig} from "./app.config";
 
 @Component({
   selector: 'app-root',
@@ -16,18 +17,7 @@ import { API_CONFIG } from "./api/api.config"; // Fix the import
   styles: [],
   providers: [
     ApiService, // Make sure ApiService is provided
-    {
-      provide: API_CONFIG,
-      useValue: {
-        baseUrl: 'http://localhost:5001/api',
-        endpoints: {
-          databases: { path: 'databases' },
-          tables: { path: 'tables' }
-        },
-        defaultTimeout: 5000,
-        defaultRetries: 2
-      }
-    }
+    {provide: API_CONFIG, useValue: appConfig.api }
   ]
 })
 export class AppComponent {
