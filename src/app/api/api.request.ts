@@ -1,5 +1,5 @@
 // api.request.ts
-import { Injectable, Inject } from '@angular/core';
+import { Inject } from '@angular/core';
 import { ApiConfig, ApiResponse, Api, ApiSearchParameters, ApiSearchResponse } from './api';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
