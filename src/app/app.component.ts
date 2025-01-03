@@ -1,7 +1,7 @@
 // loading.handler.ts
-import {Observable, catchError, finalize, map, of, tap, Subject, takeUntil} from 'rxjs';
-import { ApiError } from './api/api.error';
-import { HttpErrorResponse } from '@angular/common/http';
+import {Observable, catchError, map, of, tap, Subject} from 'rxjs';
+import {ApiError} from './api/api.error';
+import {HttpErrorResponse} from '@angular/common/http';
 import {RouterOutlet} from "@angular/router";
 import {Component, OnDestroy, OnInit} from "@angular/core";
 import {JsonPipe, NgIf} from "@angular/common";
