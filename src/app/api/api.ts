@@ -87,48 +87,27 @@ export interface ApiSearchParameters extends PaginationParams {
   groupby?: string;
 }
 
-/**
- * Standard API response wrapper
- * @interface ApiResponse
- * @template T - Type of the response data
- */
-export interface ApiResponse<T> {
-  /** Response data */
-  data: T;
-  /** Response metadata */
-  metadata: {
-    /** Timestamp of the response */
-    timestamp: string;
-    /** HTTP status code */
-    statusCode: number;
-    /** Optional message */
-    message?: string;
-  };
-}
+import { ApiResponse, ApiSearchResponse } from './api.response';
 
 /**
- * Response wrapper for search operations
- * @interface ApiSearchResponse
- * @template T - Type of the individual items in the response
- * @extends ApiResponse
- */
-export interface ApiSearchResponse<T> extends ApiResponse<T[]> {
-  /** Pagination information */
-  pagination: {
-    /** Total number of items */
-    total: number;
-    /** Current page number */
-    page: number;
-    /** Items per page */
-    limit: number;
-    /** Total number of pages */
-    pages: number;
-  };
-}
-
-/**
- * Generic API service for handling REST operations
- * @class Api
+ * Core API service that handles HTTP requests to the backend.
+ * Provides methods for CRUD operations and search functionality with configurable endpoints.
+ *
+ * @example
+ * ```typescript
+ * // Configure the API
+ * const config: ApiConfig = {
+ *   baseUrl: 'https://api.example.com',
+ *   endpoints: {
+ *     users: { path: 'users', timeout: 10000, retries: 3 }
+ *   }
+ * };
+ *
+ * // Use the API service
+ * const api = new Api(httpClient, config);
+ * api.search('users', { page: 1, limit: 10 })
+ *    .subscribe(response => console.log(response));
+ * ```
  */
 @Injectable()
 export class Api {
@@ -136,22 +115,25 @@ export class Api {
   private readonly defaultRetries: number;
 
   /**
-   * Creates an instance of Api
-   * @param http - Angular HttpClient instance
-   * @param config - API configuration
+   * Creates an instance of the Api service.
+   *
+   * @param http - Angular's HttpClient for making HTTP requests
+   * @param config - API configuration including base URL and endpoint configurations
+   * @throws Error if required configuration is missing
    */
   constructor(
     private http: HttpClient,
     @Inject('API_CONFIG') private config: ApiConfig
   ) {
     this.defaultTimeout = config.defaultTimeout || 5000;
-    this.defaultRetries = config.defaultRetries || 2;
+    this.defaultRetries = config.defaultRetries || 0;
   }
 
   /**
-   * Constructs the full URL for an API endpoint
-   * @param path - Endpoint path
-   * @returns Full API URL
+   * Constructs the full URL for an API endpoint path.
+   *
+   * @param path - The endpoint path to append to the base URL
+   * @returns The complete URL
    * @private
    */
   private getUrl(path: string): string {
@@ -159,10 +141,11 @@ export class Api {
   }
 
   /**
-   * Retrieves configuration for a specific endpoint
-   * @param endpoint - Endpoint name
-   * @returns Endpoint configuration
-   * @throws Error if endpoint configuration is not found
+   * Retrieves the configuration for a specific endpoint.
+   *
+   * @param endpoint - The name of the endpoint to get configuration for
+   * @returns The endpoint configuration
+   * @throws Error if the endpoint configuration is not found
    * @private
    */
   private getEndpointConfig(endpoint: string): EndpointConfig {
@@ -174,9 +157,10 @@ export class Api {
   }
 
   /**
-   * Handles HTTP errors
-   * @param error - HTTP error response
-   * @returns Observable that errors with formatted error message
+   * Handles HTTP errors and transforms them into a consistent format.
+   *
+   * @param error - The HTTP error response
+   * @returns An observable that errors with a formatted error message
    * @private
    */
   private handleError(error: HttpErrorResponse): Observable<never> {
@@ -193,9 +177,10 @@ export class Api {
   }
 
   /**
-   * Builds HTTP parameters from search parameters
-   * @param parameters - Search parameters
-   * @returns HttpParams instance
+   * Builds HTTP parameters from search parameters.
+   *
+   * @param parameters - Search parameters including pagination, filtering, and sorting
+   * @returns HttpParams object with encoded parameters
    * @private
    */
   private buildHttpParams(parameters?: ApiSearchParameters): HttpParams {
@@ -216,22 +201,50 @@ export class Api {
   }
 
   /**
-   * Searches resources with specified parameters
+   * Searches resources with specified parameters.
+   *
    * @template T - Type of the resource
-   * @param endpoint - Endpoint name
-   * @param parameters - Search parameters
-   * @returns Observable of search results
+   * @template G - Type of grouped resources (defaults to T)
+   * @param endpoint - Name of the endpoint to search
+   * @param parameters - Search parameters including pagination, filtering, and sorting
+   * @returns Observable of search results with metadata
+   * @throws Error if endpoint is not configured
+   *
+   * @example
+   * ```typescript
+   * interface User { id: string; name: string; }
+   *
+   * api.search<User>('users', {
+   *   page: 1,
+   *   limit: 10,
+   *   search: 'john',
+   *   sort: [{ field: 'name', direction: 'asc' }]
+   * }).subscribe(response => {
+   *   console.log(response.data); // Array of users
+   *   console.log(response.total); // Total count
+   * });
+   * ```
    */
-  search<T>(
+  search<T, G = T>(
     endpoint: string,
     parameters?: ApiSearchParameters
-  ): Observable<ApiSearchResponse<T>> {
+  ): Observable<ApiSearchResponse<T, G>> {
     const endpointConfig = this.getEndpointConfig(endpoint);
     const params = this.buildHttpParams(parameters);
 
     return this.http
-               .get<ApiSearchResponse<T>>(this.getUrl(endpointConfig.path), { params })
+               .get<any>(this.getUrl(endpointConfig.path), { params })
                .pipe(
+                 map(response => new ApiSearchResponse<T, G>({
+                   data: response.data || [],
+                   total: response.total,
+                   page: parameters?.page || 1,
+                   limit: parameters?.limit || 10,
+                   groups: response.groups,
+                   sort: response.sort,
+                   statusCode: response.metadata?.statusCode || 200,
+                   message: response.metadata?.message
+                 })),
                  timeout(endpointConfig.timeout || this.defaultTimeout),
                  retry({ count: endpointConfig.retries || this.defaultRetries, delay: 1000 }),
                  catchError(this.handleError)
@@ -239,18 +252,34 @@ export class Api {
   }
 
   /**
-   * Retrieves a specific resource by ID
+   * Retrieves a single resource by ID.
+   *
    * @template T - Type of the resource
-   * @param endpoint - Endpoint name
-   * @param id - Resource identifier
-   * @returns Observable of the resource
+   * @param endpoint - Name of the endpoint
+   * @param id - Unique identifier of the resource
+   * @returns Observable of the resource with metadata
+   * @throws Error if endpoint is not configured or resource is not found
+   *
+   * @example
+   * ```typescript
+   * interface User { id: string; name: string; }
+   *
+   * api.read<User>('users', '123').subscribe(
+   *   response => console.log(response.data) // Single user
+   * );
+   * ```
    */
   read<T>(endpoint: string, id: string): Observable<ApiResponse<T>> {
     const endpointConfig = this.getEndpointConfig(endpoint);
 
     return this.http
-               .get<ApiResponse<T>>(`${this.getUrl(endpointConfig.path)}/${id}`)
+               .get<any>(`${this.getUrl(endpointConfig.path)}/${id}`)
                .pipe(
+                 map(response => new ApiResponse({
+                   data: response.data,
+                   statusCode: response.metadata.statusCode,
+                   message: response.metadata.message
+                 })),
                  timeout(endpointConfig.timeout || this.defaultTimeout),
                  retry({ count: endpointConfig.retries || this.defaultRetries, delay: 1000 }),
                  catchError(this.handleError)
@@ -258,30 +287,57 @@ export class Api {
   }
 
   /**
-   * Creates a new resource
+   * Creates a new resource.
+   *
    * @template T - Type of the resource
-   * @param endpoint - Endpoint name
-   * @param data - Resource data
-   * @returns Observable of the created resource
+   * @param endpoint - Name of the endpoint
+   * @param data - Resource data to create
+   * @returns Observable of the created resource with metadata
+   * @throws Error if endpoint is not configured or creation fails
+   *
+   * @example
+   * ```typescript
+   * interface User { id: string; name: string; }
+   *
+   * api.create<User>('users', { name: 'John Doe' }).subscribe(
+   *   response => console.log(response.data) // Created user
+   * );
+   * ```
    */
   create<T>(endpoint: string, data: Partial<T>): Observable<ApiResponse<T>> {
     const endpointConfig = this.getEndpointConfig(endpoint);
 
     return this.http
-               .post<ApiResponse<T>>(this.getUrl(endpointConfig.path), data)
+               .post<any>(this.getUrl(endpointConfig.path), data)
                .pipe(
+                 map(response => new ApiResponse({
+                   data: response.data,
+                   statusCode: response.metadata.statusCode,
+                   message: response.metadata.message
+                 })),
                  timeout(endpointConfig.timeout || this.defaultTimeout),
                  catchError(this.handleError)
                );
   }
 
   /**
-   * Updates an existing resource
+   * Updates an existing resource.
+   *
    * @template T - Type of the resource
-   * @param endpoint - Endpoint name
-   * @param id - Resource identifier
-   * @param data - Updated resource data
-   * @returns Observable of the updated resource
+   * @param endpoint - Name of the endpoint
+   * @param id - Unique identifier of the resource to update
+   * @param data - Resource data to update
+   * @returns Observable of the updated resource with metadata
+   * @throws Error if endpoint is not configured or update fails
+   *
+   * @example
+   * ```typescript
+   * interface User { id: string; name: string; }
+   *
+   * api.update<User>('users', '123', { name: 'Jane Doe' }).subscribe(
+   *   response => console.log(response.data) // Updated user
+   * );
+   * ```
    */
   update<T>(
     endpoint: string,
@@ -291,26 +347,32 @@ export class Api {
     const endpointConfig = this.getEndpointConfig(endpoint);
 
     return this.http
-               .patch<T>(`${this.getUrl(endpointConfig.path)}/${id}`, data)
+               .patch<any>(`${this.getUrl(endpointConfig.path)}/${id}`, data)
                .pipe(
-                 map((response: T) => ({
-                   data: response,
-                   metadata: {
-                     timestamp: new Date().toISOString(),
-                     statusCode: 200,
-                     message: 'Resource updated successfully',
-                   },
-                 })), // Transform response into ApiResponse<T>
-                 // timeout(endpointConfig.timeout || this.defaultTimeout),
+                 map(response => new ApiResponse({
+                   data: response.data,
+                   statusCode: response.metadata?.statusCode || 200,
+                   message: response.metadata?.message || 'Resource updated successfully'
+                 })),
+                 timeout(endpointConfig.timeout || this.defaultTimeout),
                  catchError(this.handleError)
                );
   }
 
   /**
-   * Removes a resource
-   * @param endpoint - Endpoint name
-   * @param id - Resource identifier
-   * @returns Observable of void
+   * Removes a resource.
+   *
+   * @param endpoint - Name of the endpoint
+   * @param id - Unique identifier of the resource to remove
+   * @returns Observable that completes when the resource is removed
+   * @throws Error if endpoint is not configured or removal fails
+   *
+   * @example
+   * ```typescript
+   * api.remove('users', '123').subscribe(
+   *   () => console.log('User deleted successfully')
+   * );
+   * ```
    */
   remove(endpoint: string, id: string): Observable<void> {
     const endpointConfig = this.getEndpointConfig(endpoint);

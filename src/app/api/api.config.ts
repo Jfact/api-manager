@@ -9,3 +9,11 @@ import { ApiConfig } from './api';
  * The configuration must adhere to the `ApiConfig` interface.
  */
 export const API_CONFIG = new InjectionToken<ApiConfig>('API_CONFIG');
+
+// src/app/core/interceptors/index.ts
+import { HTTP_INTERCEPTORS } from '@angular/common/http';
+import { ApiInterceptor } from './api.interceptor';
+
+export const HTTP_INTERCEPTORS_PROVIDER = [
+  { provide: HTTP_INTERCEPTORS, useClass: ApiInterceptor, multi: true }
+];

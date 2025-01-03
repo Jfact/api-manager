@@ -1,9 +1,10 @@
 // api.request.ts
 import { Inject } from '@angular/core';
-import { ApiConfig, ApiResponse, Api, ApiSearchParameters, ApiSearchResponse } from './api';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { API_CONFIG } from './api.config';
+import {Api, ApiConfig, ApiSearchParameters} from "./api";
+import {ApiResponse, ApiSearchResponse} from "./api.response";
 
 /**
  * ApiRequest extends the base Api class to encapsulate API calls for a specific path.
@@ -11,21 +12,22 @@ import { API_CONFIG } from './api.config';
  */
 export class ApiRequest extends Api {
   private readonly path: string;
-
+  private readonly endpoint: string;
   /**
    * Creates an instance of ApiRequest.
    *
-   * @param path - The base path for this specific API request.
+   * @param endpoint - The base name for this specific API request.
    * @param http - Angular HttpClient instance for HTTP operations.
    * @param config - Global API configuration injected via the `API_CONFIG` token.
    */
   constructor(
-    path: string,
+    endpoint: string,
     http: HttpClient,
     @Inject(API_CONFIG) config: ApiConfig
   ) {
     super(http, config);
-    this.path = path;
+    this.endpoint = endpoint;
+    this.path = config.endpoints[endpoint].path;
   }
 
   /**
@@ -39,10 +41,11 @@ export class ApiRequest extends Api {
   override search<T>(endpoint: string, parameters?: ApiSearchParameters): Observable<ApiSearchResponse<T>>;
   override search<T>(parameters?: ApiSearchParameters): Observable<ApiSearchResponse<T>>;
   override search<T>(endpointOrParams?: string | ApiSearchParameters, parameters?: ApiSearchParameters): Observable<ApiSearchResponse<T>> {
+    console.log(this.path);
     if (typeof endpointOrParams === 'string') {
-      return super.search<T>(this.path, parameters);
+      return super.search<T>(this.endpoint, parameters);
     }
-    return super.search<T>(this.path, endpointOrParams);
+    return super.search<T>(this.endpoint, endpointOrParams);
   }
 
   /**
@@ -56,7 +59,7 @@ export class ApiRequest extends Api {
   override read<T>(endpoint: string, id: string): Observable<ApiResponse<T>>;
   override read<T>(id: string): Observable<ApiResponse<T>>;
   override read<T>(endpointOrId: string, id?: string): Observable<ApiResponse<T>> {
-    return super.read<T>(this.path, id ?? endpointOrId);
+    return super.read<T>(this.endpoint, id ?? endpointOrId);
   }
 
   /**
@@ -71,9 +74,9 @@ export class ApiRequest extends Api {
   override create<T>(data: Partial<T>): Observable<ApiResponse<T>>;
   override create<T>(endpointOrData: string | Partial<T>, data?: Partial<T>): Observable<ApiResponse<T>> {
     if (typeof endpointOrData === 'string') {
-      return super.create<T>(this.path, data!);
+      return super.create<T>(this.endpoint, data!);
     }
-    return super.create<T>(this.path, endpointOrData);
+    return super.create<T>(this.endpoint, endpointOrData);
   }
 
   /**
@@ -89,9 +92,9 @@ export class ApiRequest extends Api {
   override update<T>(id: string, data: Partial<T>): Observable<ApiResponse<T>>;
   override update<T>(endpointOrId: string, idOrData: string | Partial<T>, data?: Partial<T>): Observable<ApiResponse<T>> {
     if (data) {
-      return super.update<T>(this.path, idOrData as string, data);
+      return super.update<T>(this.endpoint, idOrData as string, data);
     }
-    return super.update<T>(this.path, endpointOrId, idOrData as Partial<T>);
+    return super.update<T>(this.endpoint, endpointOrId, idOrData as Partial<T>);
   }
 
   /**
@@ -104,6 +107,6 @@ export class ApiRequest extends Api {
   override remove(endpoint: string, id: string): Observable<void>;
   override remove(id: string): Observable<void>;
   override remove(endpointOrId: string, id?: string): Observable<void> {
-    return super.remove(this.path, id ?? endpointOrId);
+    return super.remove(this.endpoint, id ?? endpointOrId);
   }
 }

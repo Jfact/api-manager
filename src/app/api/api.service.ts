@@ -32,11 +32,11 @@ export class ApiService {
    * Creates a new `ApiRequest` instance configured with the given API path.
    * The path should be relative to the base API URL defined in the global configuration.
    *
-   * @param path - The base path for the API endpoint (relative to the configured base URL).
+   * @param endpoint - The base endpoint for the API (relative to the configured base URL).
    * @returns A new `ApiRequest` instance configured for the specified path,
    *          ready for performing API interactions.
    */
-  add(path: string): ApiRequest {
-    return new ApiRequest(path, this.http, this.config);
+  add(endpoint: string): ApiRequest {
+    return new ApiRequest(endpoint, this.http, this.config);
   }
 }
